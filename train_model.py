@@ -6,10 +6,12 @@ import torch
 import torch.nn.functional as F
 from torch import from_numpy
 import numpy as np
-from triso.utils.image_generator import ImageGenerator
-from triso.utils.trainer import Trainer
-
 import matplotlib.pyplot as plt
+
+from utils.image_generator import ImageGenerator
+from utils.trainer import Trainer
+
+
 
 def imshow(img):
     f, ax = plt.subplots(1, 1)

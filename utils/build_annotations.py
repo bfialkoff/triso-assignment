@@ -1,13 +1,5 @@
-from glob import glob
 from pathlib import Path
-import os
 from random import sample, seed
-import cv2
-import SimpleITK
-import numpy as np
-from PIL import Image
-import skimage.io as io
-import matplotlib.pyplot as plt
 import pandas as pd
 
 def build_annotations(subject_list):
@@ -23,10 +15,12 @@ def build_annotations(subject_list):
     df = pd.DataFrame({'image_path': all_images, 'mask_path': all_masks})
     return df
 
-
+mkdir = lambda p: p.mkdir(parents=True) if not p.exists() else None
 
 if __name__ == '__main__':
-    data_path = Path(__file__).joinpath('..', '..', '..', 'data').resolve()
+    out_data_path = Path(__file__).joinpath('..', '..', 'data').resolve()
+    data_path = Path(__file__).joinpath('..', '..', '..', 'camus_data').resolve()
+    mkdir(out_data_path)
     seed(42)
     train_frac = 0.7
 
@@ -43,7 +37,7 @@ if __name__ == '__main__':
     val_df = build_annotations(val_subjects)
     test_df = pd.DataFrame(test_subjects, columns=['image_path'])
 
-    train_df.to_csv(data_path.joinpath('train_annotations.csv').resolve(), index=False)
-    val_df.to_csv(data_path.joinpath('val_annotations.csv').resolve(), index=False)
-    test_df.to_csv(data_path.joinpath('test_annotations.csv').resolve(), index=False)
+    train_df.to_csv(out_data_path.joinpath('train_annotations.csv').resolve(), index=False)
+    val_df.to_csv(out_data_path.joinpath('val_annotations.csv').resolve(), index=False)
+    test_df.to_csv(out_data_path.joinpath('test_annotations.csv').resolve(), index=False)
 
