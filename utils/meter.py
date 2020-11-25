@@ -16,8 +16,9 @@ def metric(probability, truth, threshold=0.5, reduction='none'):
     '''probability and truth must be torch tensors'''
     batch_size = len(truth)
     with torch.no_grad():
-        probability = probability.view(batch_size, -1)
-        truth = torch.from_numpy(truth).view(batch_size, -1)
+        probability = probability.reshape(batch_size, -1)
+        truth = truth.reshape(batch_size, -1)
+        #truth = torch.from_numpy(truth).view(batch_size, -1)
         assert(probability.shape == truth.shape)
 
         p = (probability > threshold).float()

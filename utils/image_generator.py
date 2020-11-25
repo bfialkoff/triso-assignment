@@ -1,23 +1,25 @@
 from random import sample, shuffle
 
+from torch import from_numpy
 import cv2
 import numpy as np
 from skimage import io
 import matplotlib.pyplot as plt
 import pandas as pd
 
-def imshow(img):
-    f, ax = plt.subplots(1, 1)
-    ax.imshow(img)
+def imshow_img_pair(img, mask):
+    f, (ax1, ax2) = plt.subplots(1, 2)
+    ax1.imshow(img)
+    ax2.imshow(mask)
     plt.show()
 
 class ImageGenerator:
-    def __init__(self, annotations_path, batch_size, input_size=(512, 512), is_torch=True):
+    def __init__(self, annotations_path, batch_size, input_size=(512, 512), num_classes=3):
         self.annotations = pd.read_csv(annotations_path)
         self.batch_size = batch_size
         self.val_batches = self.create_val_batches()
         self.input_size = input_size
-        self.is_torch = is_torch
+        self.num_classes = num_classes
 
     def create_train_batches(self):
         num_samples = len(self.annotations)
@@ -43,6 +45,7 @@ class ImageGenerator:
             s = self.num_batches * self.batch_size
             e = s + remainder
             batches.append((s, e))
+        batches = [list(range(s, e)) for s, e in batches]
         return batches
 
     def resize(self, img):
@@ -64,17 +67,14 @@ class ImageGenerator:
         img = self.resize(img)
 
         if is_mask:
-            # fixme, debug this properly make sure its happening properly
-            mask = np.zeros((3, *self.input_size), dtype=np.uint8)
-            mask[0, img == 1] = 255
-            mask[1, img == 2] = 255
-            mask[2, img == 3] = 255
+            mask = np.zeros((*self.input_size, self.num_classes), dtype=np.uint8)
+            for i in range(self.num_classes):
+                mask[img == (i + 1), i] = 255
             img = mask
-
-        elif self.is_torch:
-            img = np.expand_dims(img, 0)
-
+        else:
+            img = np.concatenate(3 * [np.expand_dims(img, 2)], axis=2)
         return img
+
     def imread_batch(self, batch):
         batch_list = batch.values.tolist()
         images = []
@@ -82,20 +82,24 @@ class ImageGenerator:
         for img_path, mask_path in batch_list:
             img = self.read_raw(img_path)
             mask = self.read_raw(mask_path, is_mask=True)
-            images.append(img)
-            masks.append(mask)
+            images.append(img / 255)
+            masks.append(mask / 255)
         images = np.array(images)
         masks = np.array(masks)
+
+        images = from_numpy(images).permute(0, 3, 1, 2).float()
+        masks = from_numpy(masks).permute(0, 3, 1, 2).float()
+
+        #imshow_img_tensor_pair(images[0].permute(1, 2, 0), masks[0].permute(1, 2, 0))
         return images, masks
 
     def train_generator(self):
-        while True:
-            print('beginning batch')
-            batches = self.create_train_batches()
-            for batch_indices in batches:
-                batch = self.annotations.loc[batch_indices]
-                images, masks = self.imread_batch(batch)
-                yield images, masks
+        #while True:
+        batches = self.create_train_batches()
+        for batch_indices in batches:
+            batch = self.annotations.loc[batch_indices]
+            images, masks = self.imread_batch(batch)
+            yield images, masks
 
     def val_generator(self):
         for batch_indices in self.val_batches:
@@ -109,8 +113,11 @@ class ImageGenerator:
 if __name__ == '__main__':
     from pathlib import Path
 
-    data_path = Path(__file__).joinpath('..', '..', '..', 'data').resolve()
+    data_path = Path(__file__).joinpath('..', '..', 'data').resolve()
     img_gen = ImageGenerator(data_path.joinpath('train_annotations.csv').resolve(), 8)
     gen = img_gen.train_generator()
-    for i in gen:
-        None
+    for imgs, masks in gen:
+        for i, m in zip(imgs, masks):
+            i = i.detach().permute(1, 2, 0).numpy()
+            m = m.detach().permute(1, 2, 0).numpy()
+            imshow_img_pair(i, m)

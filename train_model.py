@@ -18,22 +18,8 @@ def imshow(img):
     ax.imshow(img)
     plt.show()
 
-class Unet1C(Unet):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.extra_conv = torch.nn.Conv2d(1, 3, (7, 7))
+mkdir = lambda p: p.mkdir(parents=True) if not p.exists() else None
 
-    def forward(self, x):
-        x = self.extra_conv(x)
-        x = F.pad(x, (0, 6, 0, 6))
-        x = super(Unet1C, self).forward(x)
-        return x
-
-def make_weights_dir(experiment_dir):
-    weights_path = experiment_dir.joinpath('weights')
-    if not weights_path.exists():
-        weights_path.mkdir(parents=True)
-    return weights_path
 
 if __name__ == '__main__':
     initial_date = ''
@@ -43,15 +29,12 @@ if __name__ == '__main__':
     date_id = initial_date if initial_date else datetime.now().strftime('%Y%m%d%H%M')
 
     experiment_dir = Path(__file__).joinpath('..', 'triso_weights', date_id).resolve()
-    summary_path = experiment_dir.joinpath('summaries', 'summary.json')
-    weights_dir = make_weights_dir(experiment_dir)
-    initial_weights = weights_dir.joinpath(f'epoch_{initial_epoch}.pth') if (initial_epoch > 0) else None
+    mkdir(experiment_dir)
 
-    model = Unet1C("resnet18", encoder_weights="imagenet", classes=3, activation=None)
-    model(from_numpy(np.random.random((8, 1, 512, 512))).float())
+    model = Unet("resnet18", encoder_weights="imagenet", classes=3, activation=None)
 
-    data_path = Path(__file__).joinpath('..', '..', 'data').resolve()
-    train_gen_obj = ImageGenerator(data_path.joinpath('train_annotations.csv').resolve(), 8)
-    val_gen_obj = ImageGenerator(data_path.joinpath('val_annotations.csv').resolve(), 8)
+    data_path = Path(__file__).joinpath('..', 'data').resolve()
+    train_gen_obj = ImageGenerator(data_path.joinpath('train_annotations.csv').resolve(), 8, input_size=(128, 128))
+    val_gen_obj = ImageGenerator(data_path.joinpath('val_annotations.csv').resolve(), 8, input_size=(128, 128))
     trainer = Trainer(model, train_gen_obj, val_gen_obj, experiment_dir)
     trainer.start()

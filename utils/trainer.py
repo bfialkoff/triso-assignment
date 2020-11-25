@@ -1,7 +1,7 @@
 import time
 
+from tqdm import tqdm
 import torch
-from torch import from_numpy
 from torch import optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
@@ -40,10 +40,8 @@ class Trainer:
         self.dice_scores = {phase: [] for phase in self.phases}
 
     def forward(self, images, targets):
-        images = torch.from_numpy(images).float()
-        masks = torch.from_numpy(targets).float()
-        #images = images.to(self.device)
-        #masks = targets.to(self.device)
+        images = images.to(self.device)
+        masks = targets.to(self.device)
         outputs = self.net(images)
         loss = self.criterion(outputs, masks)
         return loss, outputs
@@ -56,7 +54,7 @@ class Trainer:
         self.net.train(phase == 'train')
         running_loss = 0.0
         self.optimizer.zero_grad()
-        for itr, batch in enumerate(dataloader):  # replace `dataloader` with `tk0` for tqdm
+        for itr, batch in tqdm(enumerate(dataloader), total=num_batches):  # replace `dataloader` with `tk0` for tqdm
             images, targets = batch
             loss, outputs = self.forward(images, targets)
             loss = loss / self.accumulation_steps
@@ -79,6 +77,7 @@ class Trainer:
 
     def start(self):
         for epoch in range(self.num_epochs):
+            print(f'Epoch {epoch}')
             self.iterate(epoch, 'train', self.train_generator_object.train_generator(), len(self.train_generator_object))
             state = {
                 'epoch': epoch,
@@ -87,6 +86,7 @@ class Trainer:
                 'optimizer': self.optimizer.state_dict(),
             }
             with torch.no_grad():
+                print('beginning eval')
                 val_loss = self.iterate(epoch, 'val', self.val_generator_object.val_generator(), len(self.val_generator_object))
                 self.scheduler.step(val_loss)
             if val_loss < self.best_loss:
