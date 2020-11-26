@@ -48,22 +48,37 @@ class ImageGenerator:
         batches = [list(range(s, e)) for s, e in batches]
         return batches
 
-    def resize(self, img):
-        height, width = img.shape
+    def resize_img(self, img):
+        height, width = img.shape[:2]
         pad_diff = height - width
 
         if pad_diff < 0:
             dst_img = np.zeros((width, width), dtype=np.uint8)
-            dst_img[-pad_diff//2 : pad_diff //2, :] = img
+            dst_img[-pad_diff // 2: pad_diff // 2, :] = img
         else:
             dst_img = np.zeros((height, height), dtype=np.uint8)
-            dst_img[:, pad_diff // 2 : -pad_diff // 2] = img
+            dst_img[:, pad_diff // 2: -pad_diff // 2] = img
 
         dst_img = cv2.resize(dst_img, self.input_shape)
         return dst_img
 
+    def resize_mask(self, img):
+        height, width = img.shape[:2]
+        pad_diff = height - width
+
+        if pad_diff < 0:
+            dst_img = np.zeros((width, width, 3), dtype=np.uint8)
+            dst_img[-pad_diff//2 : pad_diff //2, :, :] = img
+        else:
+            dst_img = np.zeros((height, height, 3), dtype=np.uint8)
+            dst_img[:, pad_diff // 2 : -pad_diff // 2, :] = img
+
+        dst_img = cv2.resize(dst_img, self.input_shape)
+        return dst_img
+    # fixme resizing ruins mask a little
+
     def expand_mask(self, img):
-        mask = np.zeros((*self.input_shape, self.num_classes), dtype=np.uint8)
+        mask = np.zeros((*img.shape, self.num_classes), dtype=np.uint8)
         for i in range(self.num_classes):
             mask[img == (i + 1), i] = 255
         return mask
@@ -85,13 +100,29 @@ class ImageGenerator:
             img = np.concatenate(3 * [np.expand_dims(img, 2)], axis=2)
         return img
 
+    def read_image(self, path):
+        img = io.imread(path, plugin='simpleitk').squeeze()
+        img = self.resize_img(img)
+        img = np.concatenate(3 * [np.expand_dims(img, 2)], axis=2)
+        return img
+
+    def read_mask(self, path):
+        mask = io.imread(path, plugin='simpleitk').squeeze()
+        mask = self.expand_mask(mask)
+        mask = self.resize_mask(mask)
+        mask[mask > 110] = 255
+        mask[mask < 255] = 0
+        yellow_mask = (mask[:,:, 0] == 255) & (mask[:,:, 1] == 255)
+        mask[yellow_mask] = [0, 255, 0]
+        return mask
+
     def imread_batch(self, batch):
         batch_list = batch.values.tolist()
         images = []
         masks = []
         for img_path, mask_path in batch_list:
-            img = self.read_raw(img_path)
-            mask = self.read_raw(mask_path, is_mask=True)
+            img = self.read_image(img_path)
+            mask = self.read_mask(mask_path)
             images.append(img / 255)
             masks.append(mask / 255)
         images = np.array(images)
@@ -123,7 +154,7 @@ class ImageGenerator:
             batch_list = self.annotations.loc[batch_indices, 'image_path'].values.reshape(-1).tolist()
             images = []
             for img_path in batch_list:
-                img = self.read_raw(img_path)
+                img = self.read_image(img_path)
                 images.append(img / 255)
             images = np.array(images)
             images = from_numpy(images).permute(0, 3, 1, 2).float()
@@ -142,8 +173,8 @@ if __name__ == '__main__':
     from pathlib import Path
 
     data_path = Path(__file__).joinpath('..', '..', 'data').resolve()
-    img_gen = ImageGenerator(data_path.joinpath('test_annotations.csv').resolve(), 8)
-    gen = img_gen.inference_generator()
+    img_gen = ImageGenerator(data_path.joinpath('train_annotations.csv').resolve(), 8)
+    gen = img_gen.train_generator()
     for imgs, masks in gen:
         for i, m in zip(imgs, masks):
             i = i.detach().permute(1, 2, 0).numpy()
