@@ -19,7 +19,7 @@ mkdir = lambda p: p.mkdir(parents=True) if not p.exists() else None
 
 if __name__ == '__main__':
     out_data_path = Path(__file__).joinpath('..', '..', 'data').resolve()
-    data_path = Path(__file__).joinpath('..', '..', '..', 'camus_data').resolve()
+    data_path = Path('/media/adam/e46d6141-876f-4b0c-90da-9e9e217986f2/betzalel_personal/camus_data').resolve()
     mkdir(out_data_path)
     seed(42)
     train_frac = 0.7

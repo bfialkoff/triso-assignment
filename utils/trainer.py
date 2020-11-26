@@ -109,7 +109,8 @@ class Trainer:
                 print('beginning eval')
                 val_loss, val_dice, val_iou = self.iterate(epoch, 'val', self.val_generator_object.val_generator(), len(self.val_generator_object))
                 self.scheduler.step(val_loss)
-            if val_iou < self.best_iou:
+            if val_iou > self.best_iou:
+                self.best_iou = val_iou
                 state = {
                     'epoch': epoch,
                     'loss': val_loss,
