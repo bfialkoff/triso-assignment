@@ -62,15 +62,25 @@ class ImageGenerator:
         dst_img = cv2.resize(dst_img, self.input_shape)
         return dst_img
 
+    def expand_mask(self, img):
+        mask = np.zeros((*self.input_shape, self.num_classes), dtype=np.uint8)
+        for i in range(self.num_classes):
+            mask[img == (i + 1), i] = 255
+        return mask
+
+    def collapse_mask(self, mask):
+        img = np.zeros(self.input_shape, dtype=np.uint8)
+        for i in range(self.num_classes):
+            nz_pixels = np.nonzero(mask[:,:, i])
+            img[nz_pixels] = i + 1
+        return img
+
     def read_raw(self, path, is_mask=False):
         img = io.imread(path, plugin='simpleitk').squeeze()
         img = self.resize(img)
 
         if is_mask:
-            mask = np.zeros((*self.input_shape, self.num_classes), dtype=np.uint8)
-            for i in range(self.num_classes):
-                mask[img == (i + 1), i] = 255
-            img = mask
+            img = self.expand_mask(img)
         else:
             img = np.concatenate(3 * [np.expand_dims(img, 2)], axis=2)
         return img
@@ -88,7 +98,9 @@ class ImageGenerator:
         masks = np.array(masks)
 
         images = from_numpy(images).permute(0, 3, 1, 2).float()
-        masks = from_numpy(masks).permute(0, 3, 1, 2).float()
+        masks = from_numpy(masks)
+        if len(masks.shape) > 2:
+            masks = masks.permute(0, 3, 1, 2).float()
         #imshow_img_tensor_pair(images[0].permute(1, 2, 0), masks[0].permute(1, 2, 0))
         return images, masks
 
@@ -105,6 +117,24 @@ class ImageGenerator:
             images, masks = self.imread_batch(batch)
             yield images, masks
 
+    def inference_generator(self):
+        # fixme this should also do paths
+        for batch_indices in self.val_batches:
+            batch_list = self.annotations.loc[batch_indices, 'image_path'].values.reshape(-1).tolist()
+            images = []
+            for img_path in batch_list:
+                img = self.read_raw(img_path)
+                images.append(img / 255)
+            images = np.array(images)
+            images = from_numpy(images).permute(0, 3, 1, 2).float()
+            yield batch_list, images
+
+    def test_generator(self):
+        # fixme this should also do paths
+        for batch_indices in self.val_batches:
+            batch = self.annotations.loc[batch_indices]
+            images, masks = self.imread_batch(batch)
+            yield batch.values.tolist(), images
     def __len__(self):
         return self.num_batches
 
@@ -112,8 +142,8 @@ if __name__ == '__main__':
     from pathlib import Path
 
     data_path = Path(__file__).joinpath('..', '..', 'data').resolve()
-    img_gen = ImageGenerator(data_path.joinpath('train_annotations.csv').resolve(), 8)
-    gen = img_gen.train_generator()
+    img_gen = ImageGenerator(data_path.joinpath('test_annotations.csv').resolve(), 8)
+    gen = img_gen.inference_generator()
     for imgs, masks in gen:
         for i, m in zip(imgs, masks):
             i = i.detach().permute(1, 2, 0).numpy()

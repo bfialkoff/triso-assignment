@@ -1,3 +1,6 @@
 .idea/
 *weights*
 **/__pycache__/*
+**/*.jpg
+data/*
+triso_weights/*

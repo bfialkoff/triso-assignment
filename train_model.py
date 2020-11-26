@@ -1,7 +1,9 @@
 from pathlib import Path
 from datetime import datetime
 
+import matplotlib.pyplot as plt
 from segmentation_models_pytorch import Unet
+
 import torch
 tensor_type = 'torch.cuda.FloatTensor' if torch.cuda.device_count() else 'torch.FloatTensor'
 torch.set_default_tensor_type(tensor_type) # 'torch.cuda.FloatTensor'
@@ -26,16 +28,18 @@ if __name__ == '__main__':
 
     date_id = initial_date if initial_date else datetime.now().strftime('%Y%m%d%H%M')
 
-    weights_path = Path(__file__).joinpath('..', 'triso_weights', f'{date_id}_model.pth').resolve()
-    init_weights = Path(__file__).joinpath('..', 'triso_weights', '202011251913_model.pth').resolve()
-    init_weights = None
+
+    # init_weights = None
     # epoch 45 has 0.8 val iou
-    mkdir(weights_path.parent)
-    model = Unet('resnext50_32x4d',
+    backbone = 'resnext50_32x4d'
+    model = Unet(backbone,
                  encoder_weights='imagenet',
                  classes=3,
                  activation=None)
 
+    weights_path = Path(__file__).joinpath('..', 'triso_weights', f'{date_id}_{backbone}_model.pth').resolve()
+    init_weights = Path(__file__).joinpath('..', 'triso_weights', '202011252258_model.pth').resolve()
+    mkdir(weights_path.parent)
     input_size = 256
     data_path = Path(__file__).joinpath('..', 'data').resolve()
     train_gen_obj = ImageGenerator(data_path.joinpath('train_annotations.csv').resolve(), 8, input_shape=(input_size, input_size))

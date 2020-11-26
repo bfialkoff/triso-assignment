@@ -5,8 +5,8 @@ from tqdm import tqdm
 import torch
 from torch import optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-
-from .meter import Meter
+from segmentation_models_pytorch.utils.losses import DiceLoss
+from utils.meter import Meter
 
 def imshow_img_pair(img, mask):
     f, (ax1, ax2) = plt.subplots(1, 2)
@@ -14,10 +14,15 @@ def imshow_img_pair(img, mask):
     ax2.imshow(mask)
     plt.show()
 
+epoch_log = lambda epoch_loss, dice, iou: print('Loss: %0.4f | IoU: %0.4f | dice: %0.4f |' % (epoch_loss, iou, dice))
 
-def epoch_log(epoch_loss, dice, iou):
-    '''logging the metrics at the end of an epoch'''
-    print('Loss: %0.4f | IoU: %0.4f | dice: %0.4f |' % (epoch_loss, iou, dice))
+class Criterion:
+    def __init__(self, *losses):
+        self.losses = losses
+
+    def __call__(self, p, t):
+        l = sum(loss(p, t) for loss in self.losses)
+        return l
 
 class Trainer:
     '''This class takes care of training and validation of our model'''
@@ -36,9 +41,12 @@ class Trainer:
         self.initial_epoch = 0
         self.best_loss = float('inf')
         self.phases = ['train', 'val']
-        self.device = torch.device('gpu' if torch.cuda.device_count() else 'cpu') # fixme needs to actually be cuda:0 or somethin
+        self.device = torch.device('cuda:0' if torch.cuda.device_count() else 'cpu')
         self.net = model
-        self.criterion = torch.nn.BCEWithLogitsLoss()
+        self.bce_loss = torch.nn.BCEWithLogitsLoss()
+        self.dice_loss = DiceLoss(activation='softmax2d')
+        self.criterion = Criterion(self.bce_loss, self.dice_loss)
+
         self.optimizer = optim.Adam(self.net.parameters(), lr=self.lr)
         self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', patience=3, verbose=True)
         if self.initial_weights:
@@ -95,17 +103,18 @@ class Trainer:
         for epoch in range(self.initial_epoch, self.num_epochs):
             print(f'Epoch {epoch}')
             self.iterate(epoch, 'train', self.train_generator_object.train_generator(), len(self.train_generator_object))
-            state = { # fixme move this to only happen if we save the state else no reason to do it
-                'epoch': epoch,
-                'best_loss': self.best_loss,
-                'state_dict': self.net.state_dict(),
-                'optimizer': self.optimizer.state_dict(),
-            }
+
             with torch.no_grad():
                 print('beginning eval')
                 val_loss = self.iterate(epoch, 'val', self.val_generator_object.val_generator(), len(self.val_generator_object))
                 self.scheduler.step(val_loss)
             if val_loss < self.best_loss:
+                state = {
+                    'epoch': epoch,
+                    'best_loss': self.best_loss,
+                    'state_dict': self.net.state_dict(),
+                    'optimizer': self.optimizer.state_dict(),
+                }
                 print('******** New optimal found, saving state ********')
                 state['best_loss'] = self.best_loss = val_loss
                 torch.save(state, self.weights_path)
