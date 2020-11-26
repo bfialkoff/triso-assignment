@@ -67,7 +67,7 @@ class Predictor:
         cv2.imwrite(str(input_path), input_image)
         cv2.imwrite(str(output_path), output_image)
         if gt_src_path.exists():
-            gt_mask = self.generator_object.read_raw(str(gt_src_path), is_mask=True)
+            gt_mask = self.generator_object.read_mask(str(gt_src_path))
             success = cv2.imwrite(str(gt_dst_path), gt_mask)
             if not success:
                 imshow_img_pair(gt_mask, gt_mask)
