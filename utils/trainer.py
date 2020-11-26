@@ -40,6 +40,7 @@ class Trainer:
         self.num_epochs = num_epochs
         self.initial_epoch = 0
         self.best_loss = float('inf')
+        self.best_iou = 0
         self.phases = ['train', 'val']
         self.device = torch.device('cuda:0' if torch.cuda.device_count() else 'cpu')
         self.net = model
@@ -97,7 +98,7 @@ class Trainer:
         self.dice_scores[phase].append(dice)
         self.iou_scores[phase].append(iou)
         torch.cuda.empty_cache()
-        return epoch_loss
+        return epoch_loss, dice, iou
 
     def start(self):
         for epoch in range(self.initial_epoch, self.num_epochs):
@@ -106,16 +107,17 @@ class Trainer:
 
             with torch.no_grad():
                 print('beginning eval')
-                val_loss = self.iterate(epoch, 'val', self.val_generator_object.val_generator(), len(self.val_generator_object))
+                val_loss, val_dice, val_iou = self.iterate(epoch, 'val', self.val_generator_object.val_generator(), len(self.val_generator_object))
                 self.scheduler.step(val_loss)
-            if val_loss < self.best_loss:
+            if val_iou < self.best_iou:
                 state = {
                     'epoch': epoch,
-                    'best_loss': self.best_loss,
+                    'loss': val_loss,
+                    'best_iou': val_iou,
+                    'dice': val_dice,
                     'state_dict': self.net.state_dict(),
                     'optimizer': self.optimizer.state_dict(),
                 }
                 print('******** New optimal found, saving state ********')
-                state['best_loss'] = self.best_loss = val_loss
                 torch.save(state, self.weights_path)
 
