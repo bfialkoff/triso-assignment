@@ -3,10 +3,8 @@ from datetime import datetime
 
 from segmentation_models_pytorch import Unet
 import torch
-import torch.nn.functional as F
-from torch import from_numpy
-import numpy as np
-import matplotlib.pyplot as plt
+tensor_type = 'torch.cuda.FloatTensor' if torch.cuda.device_count() else 'torch.FloatTensor'
+torch.set_default_tensor_type(tensor_type) # 'torch.cuda.FloatTensor'
 
 from utils.image_generator import ImageGenerator
 from utils.trainer import Trainer
@@ -28,13 +26,20 @@ if __name__ == '__main__':
 
     date_id = initial_date if initial_date else datetime.now().strftime('%Y%m%d%H%M')
 
-    experiment_dir = Path(__file__).joinpath('..', 'triso_weights', date_id).resolve()
-    mkdir(experiment_dir)
+    weights_path = Path(__file__).joinpath('..', 'triso_weights', f'{date_id}_model.pth').resolve()
+    init_weights = Path(__file__).joinpath('..', 'triso_weights', '202011251913_model.pth').resolve()
+    init_weights = None
+    # epoch 45 has 0.8 val iou
+    mkdir(weights_path.parent)
+    model = Unet('resnext50_32x4d',
+                 encoder_weights='imagenet',
+                 classes=3,
+                 activation=None)
 
-    model = Unet("resnet18", encoder_weights="imagenet", classes=3, activation=None)
-
+    input_size = 256
     data_path = Path(__file__).joinpath('..', 'data').resolve()
-    train_gen_obj = ImageGenerator(data_path.joinpath('train_annotations.csv').resolve(), 8, input_size=(128, 128))
-    val_gen_obj = ImageGenerator(data_path.joinpath('val_annotations.csv').resolve(), 8, input_size=(128, 128))
-    trainer = Trainer(model, train_gen_obj, val_gen_obj, experiment_dir)
+    train_gen_obj = ImageGenerator(data_path.joinpath('train_annotations.csv').resolve(), 8, input_shape=(input_size, input_size))
+    val_gen_obj = ImageGenerator(data_path.joinpath('val_annotations.csv').resolve(), 8, input_shape=(input_size, input_size))
+    trainer = Trainer(model, train_gen_obj, val_gen_obj, weights_path, num_epochs=num_epochs, initial_weights=init_weights)
     trainer.start()
+    # want 85 % ish

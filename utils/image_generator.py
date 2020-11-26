@@ -14,11 +14,11 @@ def imshow_img_pair(img, mask):
     plt.show()
 
 class ImageGenerator:
-    def __init__(self, annotations_path, batch_size, input_size=(512, 512), num_classes=3):
+    def __init__(self, annotations_path, batch_size, input_shape=(512, 512), num_classes=3):
         self.annotations = pd.read_csv(annotations_path)
         self.batch_size = batch_size
         self.val_batches = self.create_val_batches()
-        self.input_size = input_size
+        self.input_shape = input_shape
         self.num_classes = num_classes
 
     def create_train_batches(self):
@@ -59,7 +59,7 @@ class ImageGenerator:
             dst_img = np.zeros((height, height), dtype=np.uint8)
             dst_img[:, pad_diff // 2 : -pad_diff // 2] = img
 
-        dst_img = cv2.resize(dst_img, self.input_size)
+        dst_img = cv2.resize(dst_img, self.input_shape)
         return dst_img
 
     def read_raw(self, path, is_mask=False):
@@ -67,7 +67,7 @@ class ImageGenerator:
         img = self.resize(img)
 
         if is_mask:
-            mask = np.zeros((*self.input_size, self.num_classes), dtype=np.uint8)
+            mask = np.zeros((*self.input_shape, self.num_classes), dtype=np.uint8)
             for i in range(self.num_classes):
                 mask[img == (i + 1), i] = 255
             img = mask
@@ -89,12 +89,10 @@ class ImageGenerator:
 
         images = from_numpy(images).permute(0, 3, 1, 2).float()
         masks = from_numpy(masks).permute(0, 3, 1, 2).float()
-
         #imshow_img_tensor_pair(images[0].permute(1, 2, 0), masks[0].permute(1, 2, 0))
         return images, masks
 
     def train_generator(self):
-        #while True:
         batches = self.create_train_batches()
         for batch_indices in batches:
             batch = self.annotations.loc[batch_indices]

@@ -36,14 +36,7 @@ def metric(probability, truth, threshold=0.5, reduction='none'):
         dice_pos = dice_pos[pos_index]
         dice = torch.cat([dice_pos, dice_neg])
 
-#         dice_neg = np.nan_to_num(dice_neg.mean().item(), 0)
-#         dice_pos = np.nan_to_num(dice_pos.mean().item(), 0)
-#         dice = dice.mean().item()
-
-        num_neg = len(neg_index)
-        num_pos = len(pos_index)
-
-    return dice, dice_neg, dice_pos, num_neg, num_pos
+    return dice
 
 def predict(X, threshold):
     '''X is sigmoid output of the model'''
@@ -72,24 +65,17 @@ class Meter:
     def __init__(self, phase, epoch):
         self.base_threshold = 0.5 # <<<<<<<<<<< here's the threshold
         self.base_dice_scores = []
-        self.dice_neg_scores = []
-        self.dice_pos_scores = []
         self.iou_scores = []
 
     def update(self, targets, outputs):
         probs = torch.sigmoid(outputs)
-        dice, dice_neg, dice_pos, _, _ = metric(probs, targets, self.base_threshold)
+        dice = metric(probs, targets, self.base_threshold)
         self.base_dice_scores.extend(dice.tolist())
-        self.dice_pos_scores.extend(dice_pos.tolist())
-        self.dice_neg_scores.extend(dice_neg.tolist())
         preds = predict(probs, self.base_threshold)
-        iou = compute_iou_batch(preds, targets, classes=[1])
+        iou = compute_iou_batch(preds, targets, classes=[1]) # fixme iou is computed on 1 class ?!
         self.iou_scores.append(iou)
 
     def get_metrics(self):
         dice = np.nanmean(self.base_dice_scores)
-        dice_neg = np.nanmean(self.dice_neg_scores)
-        dice_pos = np.nanmean(self.dice_pos_scores)
-        dices = [dice, dice_neg, dice_pos]
         iou = np.nanmean(self.iou_scores)
-        return dices, iou
+        return dice, iou
