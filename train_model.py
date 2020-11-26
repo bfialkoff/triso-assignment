@@ -31,14 +31,13 @@ if __name__ == '__main__':
 
     # init_weights = None
     # epoch 45 has 0.8 val iou
-    backbone = 'resnext50_32x4d'
+    backbone = 'resnet18'
     model = Unet(backbone,
                  encoder_weights='imagenet',
-                 classes=3,
-                 activation=None)
+                 classes=3)
 
     weights_path = Path(__file__).joinpath('..', 'triso_weights', f'{date_id}_{backbone}_model.pth').resolve()
-    init_weights = Path(__file__).joinpath('..', 'triso_weights', '202011252258_model.pth').resolve()
+    init_weights = Path(__file__).joinpath('..', 'triso_weights', f'202011251913_{backbone}_model.pth').resolve()
     mkdir(weights_path.parent)
     input_size = 256
     data_path = Path(__file__).joinpath('..', 'data').resolve()
