@@ -75,7 +75,6 @@ class ImageGenerator:
 
         dst_img = cv2.resize(dst_img, self.input_shape)
         return dst_img
-    # fixme resizing ruins mask a little
 
     def expand_mask(self, img):
         mask = np.zeros((*img.shape, self.num_classes), dtype=np.uint8)
@@ -88,16 +87,6 @@ class ImageGenerator:
         for i in range(self.num_classes):
             nz_pixels = np.nonzero(mask[:,:, i])
             img[nz_pixels] = i + 1
-        return img
-
-    def read_raw(self, path, is_mask=False):
-        img = io.imread(path, plugin='simpleitk').squeeze()
-        img = self.resize(img)
-
-        if is_mask:
-            img = self.expand_mask(img)
-        else:
-            img = np.concatenate(3 * [np.expand_dims(img, 2)], axis=2)
         return img
 
     def read_image(self, path):

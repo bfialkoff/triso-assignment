@@ -29,15 +29,13 @@ if __name__ == '__main__':
     date_id = initial_date if initial_date else datetime.now().strftime('%Y%m%d%H%M')
 
 
-    # init_weights = None
-    # epoch 45 has 0.8 val iou
     backbone = 'resnet18'
     model = Unet(backbone,
                  encoder_weights='imagenet',
                  classes=3)
 
     weights_path = Path(__file__).joinpath('..', 'triso_weights', f'{date_id}_{backbone}_model.pth').resolve()
-    init_weights = Path(__file__).joinpath('..', 'triso_weights', f'202011251913_{backbone}_model.pth').resolve()
+    init_weights = Path(__file__).joinpath('..', 'triso_weights', f'202011262249_{backbone}_model.pth').resolve()
     init_weights = None
     mkdir(weights_path.parent)
     input_size = 256

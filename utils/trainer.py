@@ -1,11 +1,10 @@
 import time
-
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import torch
-from torch import optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from segmentation_models_pytorch.utils.losses import DiceLoss
+from torch.optim.adamw import AdamW
+from torch.optim.lr_scheduler import ReduceLROnPlateau, CyclicLR
+from segmentation_models_pytorch.utils.losses import DiceLoss, JaccardLoss
 from utils.meter import Meter
 
 def imshow_img_pair(img, mask):
@@ -42,14 +41,19 @@ class Trainer:
         self.best_loss = float('inf')
         self.best_iou = 0
         self.phases = ['train', 'val']
-        self.device = torch.device('cuda:0' if torch.cuda.device_count() else 'cpu')
+        self.device = torch.device('cuda:1' if torch.cuda.device_count() else 'cpu')
         self.net = model
         self.bce_loss = torch.nn.BCEWithLogitsLoss()
         self.dice_loss = DiceLoss(activation='softmax2d')
-        self.criterion = Criterion(self.bce_loss, self.dice_loss)
+        self.jaccard_loss = JaccardLoss(activation='softmax2d')
+        self.criterion = Criterion(self.bce_loss, self.jaccard_loss, self.dice_loss)
 
-        self.optimizer = optim.Adam(self.net.parameters(), lr=self.lr)
-        self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', patience=3, verbose=True)
+        #self.optimizer = optim.Adam(self.net.parameters(), lr=self.lr)
+        self.optimizer = torch.optim.SGD(model.parameters(),lr=self.lr, momentum=0.9)
+
+        #self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', patience=3, verbose=True)
+        self.scheduler = CyclicLR(self.optimizer, base_lr=self.lr, max_lr=1e2 * self.lr, step_size_up=2000)
+
         if self.initial_weights:
             self.restore_state()
         self.net = self.net.to(self.device)
