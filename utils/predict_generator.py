@@ -28,7 +28,7 @@ class Predictor:
         self.weights = weights
         self.generator_object = generator_object
         self.batch_size = generator_object.batch_size
-        self.device = torch.device('gpu' if torch.cuda.device_count() else 'cpu') # fixme needs to actually be cuda:0 or somethin
+        self.device = torch.device('cuda:0' if torch.cuda.device_count() else 'cpu')
         self.net = model
         self.restore_state()
         self.net = self.net.to(self.device)
@@ -45,29 +45,25 @@ class Predictor:
         outputs = self.net(images)
         return outputs
 
-    def write(self, input_tensor, output_tensor, src_path):
-        src_path  = Path(src_path)
+    def write(self, input_image, output_image, src_path):
+        src_path = Path(src_path)
         patient = src_path.parent.name
         name = src_path.name
         dst_path = self.dst_path.joinpath(patient).resolve()
 
         gt_src_path = src_path.parent.joinpath(name.replace('.mhd', '_gt.mhd'))
 
-        gt_dst_path = dst_path.joinpath(gt_src_path.name.replace('.mhd', '.jpg'))
-        input_path = dst_path.joinpath(name.replace('.mhd', '.jpg'))
-        output_path = dst_path.joinpath(name.replace('.mhd', '_pred.jpg'))
-
-        input_image = np.moveaxis(input_tensor.detach().numpy(), 0, -1)
-        output_image = sigmoid(np.moveaxis(output_tensor.detach().numpy(), 0, -1))
-
-        input_image = (255 * input_image).astype(np.uint8)
-        output_image = (255 * output_image).astype(np.uint8)
+        gt_dst_path = dst_path.joinpath(gt_src_path.name.replace('.mhd', '.png'))
+        input_path = dst_path.joinpath(name.replace('.mhd', '.png'))
+        output_path = dst_path.joinpath(name.replace('.mhd', '_pred.png'))
 
         mkdir(input_path.parent)
         cv2.imwrite(str(input_path), input_image)
         cv2.imwrite(str(output_path), output_image)
         if gt_src_path.exists():
-            gt_mask = self.generator_object.read_mask(str(gt_src_path))
+            gt_mask = self.generator_object.read_mask(str(gt_src_path),
+                                                      self.generator_object.input_shape,
+                                                      self.generator_object.num_classes)
             success = cv2.imwrite(str(gt_dst_path), gt_mask)
             if not success:
                 imshow_img_pair(gt_mask, gt_mask)
@@ -80,7 +76,13 @@ class Predictor:
             paths, images = batch
             images = images.to(self.device)
             outputs = self.net(images)
-            outputs = outputs.detach().cpu()
+
+            images = images.detach().cpu().permute(0, 2, 3, 1).numpy()
+            outputs = torch.sigmoid(outputs.detach().cpu()).permute(0, 2, 3, 1).numpy()
+            images = (255 * images).astype(np.uint8)
+            outputs = (255 * outputs).astype(np.uint8)
+
+            outputs = self.generator_object.postprocess_batch(outputs)
             for p, i, o in zip(paths, images, outputs):
                 self.write(i, o, p)
 

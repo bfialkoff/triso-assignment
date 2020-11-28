@@ -66,6 +66,8 @@ class Meter:
         self.base_threshold = 0.5 # <<<<<<<<<<< here's the threshold
         self.base_dice_scores = []
         self.iou_scores = []
+        self.pp_base_dice_scores = []
+        self.pp_iou_scores = []
 
     def update(self, targets, outputs):
         probs = torch.sigmoid(outputs)
@@ -75,7 +77,22 @@ class Meter:
         iou = compute_iou_batch(preds, targets, classes=[1]) # fixme iou is computed on 1 class ?!
         self.iou_scores.append(iou)
 
+    def update_with_post_process(self, targets, outputs, post_process_function):
+        probs = torch.sigmoid(outputs)
+        probs = probs.detach().permute(0, 2, 3, 1).numpy()
+        probs = (255 * probs).astype(np.uint8)
+        probs = post_process_function(probs) / 255
+        probs = torch.from_numpy(probs).permute(0, 3, 1, 2).float()
+
+        dice = metric(probs, targets, self.base_threshold)
+        self.pp_base_dice_scores.extend(dice.tolist())
+        preds = predict(probs, self.base_threshold)
+        iou = compute_iou_batch(preds, targets, classes=[1]) # fixme iou is computed on 1 class ?!
+        self.pp_iou_scores.append(iou)
+
     def get_metrics(self):
         dice = np.nanmean(self.base_dice_scores)
         iou = np.nanmean(self.iou_scores)
-        return dice, iou
+        pp_iou = np.nanmean(self.pp_base_dice_scores)
+        pp_dice = np.nanmean(self.pp_iou_scores)
+        return dice, iou, pp_dice, pp_iou

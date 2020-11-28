@@ -1,8 +1,9 @@
 import time
+
+import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import torch
-from torch.optim.adamw import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau, CyclicLR
 from segmentation_models_pytorch.utils.losses import DiceLoss, JaccardLoss
 from utils.meter import Meter
@@ -13,7 +14,10 @@ def imshow_img_pair(img, mask):
     ax2.imshow(mask)
     plt.show()
 
-epoch_log = lambda epoch_loss, dice, iou: print('Loss: %0.4f | IoU: %0.4f | dice: %0.4f |' % (epoch_loss, iou, dice))
+epoch_log = lambda epoch_loss, dice, iou, pp_iou, pp_dice: \
+    print('Loss: %0.4f | IoU: %0.4f | dice: %0.4f |'
+          'ppIoU: %0.4f | ppdice: %0.4f |' % (epoch_loss, iou, dice, pp_iou, pp_dice))
+
 
 class Criterion:
     def __init__(self, *losses):
@@ -41,18 +45,15 @@ class Trainer:
         self.best_loss = float('inf')
         self.best_iou = 0
         self.phases = ['train', 'val']
-        self.device = torch.device('cuda:1' if torch.cuda.device_count() else 'cpu')
+        self.device = torch.device('cuda:0' if torch.cuda.device_count() else 'cpu')
         self.net = model
         self.bce_loss = torch.nn.BCEWithLogitsLoss()
         self.dice_loss = DiceLoss(activation='softmax2d')
         self.jaccard_loss = JaccardLoss(activation='softmax2d')
         self.criterion = Criterion(self.bce_loss, self.jaccard_loss, self.dice_loss)
 
-        #self.optimizer = optim.Adam(self.net.parameters(), lr=self.lr)
-        self.optimizer = torch.optim.SGD(model.parameters(),lr=self.lr, momentum=0.9)
-
-        #self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', patience=3, verbose=True)
-        self.scheduler = CyclicLR(self.optimizer, base_lr=self.lr, max_lr=1e2 * self.lr, step_size_up=2000)
+        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=self.lr)
+        self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', patience=3, verbose=True)
 
         if self.initial_weights:
             self.restore_state()
@@ -75,8 +76,9 @@ class Trainer:
         loss = self.criterion(outputs, masks)
         return loss, outputs
 
-    def iterate(self, epoch, phase, dataloader, num_batches):
+    def iterate(self, epoch, phase, dataloader, num_batches, should_postprocess=True):
         meter = Meter(phase, epoch)
+        meter_pp = Meter(phase, epoch)
         start = time.strftime('%H:%M:%S')
         print(f'Starting epoch: {epoch} | phase: {phase} | ⏰: {start}')
         self.net.train(phase == 'train')
@@ -85,24 +87,29 @@ class Trainer:
         for i, batch in tqdm(enumerate(dataloader), total=num_batches):
             images, targets = batch
             loss, outputs = self.forward(images, targets)
+            outputs_pp = outputs
             loss = loss / self.accumulation_steps
             if phase == 'train':
                 loss.backward()
                 if (i + 1) % self.accumulation_steps == 0:
                     self.optimizer.step()
                     self.optimizer.zero_grad()
+
             running_loss += loss.item()
             outputs = outputs.detach().cpu()
             meter.update(targets, outputs)
+            meter.update_with_post_process(targets, outputs, self.train_generator_object.postprocess_batch)
+
         epoch_loss = (running_loss * self.accumulation_steps) / num_batches
 
-        dice, iou = meter.get_metrics()
-        epoch_log(epoch_loss, dice, iou)
+        dice, iou, pp_dice, pp_iou = meter.get_metrics()
+        epoch_log(epoch_loss, dice, iou, pp_dice, pp_iou)
+
         self.losses[phase].append(epoch_loss)
         self.dice_scores[phase].append(dice)
         self.iou_scores[phase].append(iou)
         torch.cuda.empty_cache()
-        return epoch_loss, dice, iou
+        return epoch_loss, pp_dice, pp_iou
 
     def start(self):
         for epoch in range(self.initial_epoch, self.num_epochs):

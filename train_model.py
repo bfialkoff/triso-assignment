@@ -35,13 +35,15 @@ if __name__ == '__main__':
                  classes=3)
 
     weights_path = Path(__file__).joinpath('..', 'triso_weights', f'{date_id}_{backbone}_model.pth').resolve()
-    init_weights = Path(__file__).joinpath('..', 'triso_weights', f'202011262249_{backbone}_model.pth').resolve()
-    init_weights = None
+    init_weights = Path(__file__).joinpath('..', 'triso_weights', f'202011251913_{backbone}_model.pth').resolve()
+    # init_weights = None
+
     mkdir(weights_path.parent)
     input_size = 256
+    batch_size = 16
     data_path = Path(__file__).joinpath('..', 'data').resolve()
-    train_gen_obj = ImageGenerator(data_path.joinpath('train_annotations.csv').resolve(), 32, input_shape=(input_size, input_size))
-    val_gen_obj = ImageGenerator(data_path.joinpath('val_annotations.csv').resolve(), 32, input_shape=(input_size, input_size))
+    train_gen_obj = ImageGenerator(data_path.joinpath('train_annotations.csv').resolve(), batch_size, input_shape=(input_size, input_size))
+    val_gen_obj = ImageGenerator(data_path.joinpath('val_annotations.csv').resolve(), batch_size, input_shape=(input_size, input_size))
     trainer = Trainer(model, train_gen_obj, val_gen_obj, weights_path, num_epochs=num_epochs, initial_weights=init_weights)
     trainer.start()
     # want 85 % ish

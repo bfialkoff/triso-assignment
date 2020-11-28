@@ -7,13 +7,17 @@ from skimage import io
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from utils.img_ops import ImgOps
+
 def imshow_img_pair(img, mask):
     f, (ax1, ax2) = plt.subplots(1, 2)
     ax1.imshow(img)
     ax2.imshow(mask)
     plt.show()
 
-class ImageGenerator:
+
+class ImageGenerator(ImgOps):
+
     def __init__(self, annotations_path, batch_size, input_shape=(512, 512), num_classes=3):
         self.annotations = pd.read_csv(annotations_path)
         self.batch_size = batch_size
@@ -48,80 +52,20 @@ class ImageGenerator:
         batches = [list(range(s, e)) for s, e in batches]
         return batches
 
-    def resize_img(self, img):
-        height, width = img.shape[:2]
-        pad_diff = height - width
-
-        if pad_diff < 0:
-            dst_img = np.zeros((width, width), dtype=np.uint8)
-            dst_img[-pad_diff // 2: pad_diff // 2, :] = img
-        else:
-            dst_img = np.zeros((height, height), dtype=np.uint8)
-            dst_img[:, pad_diff // 2: -pad_diff // 2] = img
-
-        dst_img = cv2.resize(dst_img, self.input_shape)
-        return dst_img
-
-    def resize_mask(self, img):
-        height, width = img.shape[:2]
-        pad_diff = height - width
-
-        if pad_diff < 0:
-            dst_img = np.zeros((width, width, 3), dtype=np.uint8)
-            dst_img[-pad_diff//2 : pad_diff //2, :, :] = img
-        else:
-            dst_img = np.zeros((height, height, 3), dtype=np.uint8)
-            dst_img[:, pad_diff // 2 : -pad_diff // 2, :] = img
-
-        dst_img = cv2.resize(dst_img, self.input_shape)
-        return dst_img
-
-    def expand_mask(self, img):
-        mask = np.zeros((*img.shape, self.num_classes), dtype=np.uint8)
-        for i in range(self.num_classes):
-            mask[img == (i + 1), i] = 255
-        return mask
-
-    def collapse_mask(self, mask):
-        img = np.zeros(self.input_shape, dtype=np.uint8)
-        for i in range(self.num_classes):
-            nz_pixels = np.nonzero(mask[:,:, i])
-            img[nz_pixels] = i + 1
-        return img
-
-    def read_image(self, path):
-        img = io.imread(path, plugin='simpleitk').squeeze()
-        img = self.resize_img(img)
-        img = np.concatenate(3 * [np.expand_dims(img, 2)], axis=2)
-        return img
-
-    def read_mask(self, path):
-        mask = io.imread(path, plugin='simpleitk').squeeze()
-        mask = self.expand_mask(mask)
-        mask = self.resize_mask(mask)
-        mask[mask > 110] = 255
-        mask[mask < 255] = 0
-        yellow_mask = (mask[:,:, 0] == 255) & (mask[:,:, 1] == 255)
-        mask[yellow_mask] = [0, 255, 0]
-        return mask
-
     def imread_batch(self, batch):
         batch_list = batch.values.tolist()
         images = []
         masks = []
         for img_path, mask_path in batch_list:
-            img = self.read_image(img_path)
-            mask = self.read_mask(mask_path)
+            img = self.read_image(img_path, self.input_shape)
+            mask = self.read_mask(mask_path, self.input_shape, self.num_classes)
             images.append(img / 255)
             masks.append(mask / 255)
         images = np.array(images)
         masks = np.array(masks)
 
         images = from_numpy(images).permute(0, 3, 1, 2).float()
-        masks = from_numpy(masks)
-        if len(masks.shape) > 2:
-            masks = masks.permute(0, 3, 1, 2).float()
-        #imshow_img_tensor_pair(images[0].permute(1, 2, 0), masks[0].permute(1, 2, 0))
+        masks = from_numpy(masks).permute(0, 3, 1, 2).float()
         return images, masks
 
     def train_generator(self):
@@ -143,7 +87,7 @@ class ImageGenerator:
             batch_list = self.annotations.loc[batch_indices, 'image_path'].values.reshape(-1).tolist()
             images = []
             for img_path in batch_list:
-                img = self.read_image(img_path)
+                img = self.read_image(img_path, self.input_shape)
                 images.append(img / 255)
             images = np.array(images)
             images = from_numpy(images).permute(0, 3, 1, 2).float()
