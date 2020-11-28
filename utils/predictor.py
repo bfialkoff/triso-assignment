@@ -49,8 +49,8 @@ class Predictor:
         src_path = Path(src_path)
         patient = src_path.parent.name
         name = src_path.name
-        dst_path = self.dst_path.joinpath(patient).resolve()
 
+        dst_path = self.dst_path.joinpath(patient).resolve()
         gt_src_path = src_path.parent.joinpath(name.replace('.mhd', '_gt.mhd'))
 
         gt_dst_path = dst_path.joinpath(gt_src_path.name.replace('.mhd', '.png'))

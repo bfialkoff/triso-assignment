@@ -23,9 +23,7 @@ mkdir = lambda p: p.mkdir(parents=True) if not p.exists() else None
 
 if __name__ == '__main__':
     initial_date = ''
-    initial_epoch = -1
     num_epochs = 10000
-
     date_id = initial_date if initial_date else datetime.now().strftime('%Y%m%d%H%M')
 
 
@@ -36,7 +34,7 @@ if __name__ == '__main__':
 
     weights_path = Path(__file__).joinpath('..', 'triso_weights', f'{date_id}_{backbone}_model.pth').resolve()
     init_weights = Path(__file__).joinpath('..', 'triso_weights', f'202011251913_{backbone}_model.pth').resolve()
-    # init_weights = None
+    init_weights = None
 
     mkdir(weights_path.parent)
     input_size = 256
