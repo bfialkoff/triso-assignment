@@ -5,10 +5,11 @@ import numpy as np
 from skimage import io
 import matplotlib.pyplot as plt
 
-def imshow_img_pair(img, mask, t=None):
-    f, (ax1, ax2) = plt.subplots(1, 2)
-    ax1.imshow(img)
-    ax2.imshow(mask)
+def imshow_imgs(*imgs, t=None):
+    f, axes = plt.subplots(1, len(imgs))
+    for ax, img in zip(axes, imgs):
+        ax.imshow(img)
+
     if t is not None:
         plt.suptitle(t)
     plt.show()
@@ -72,16 +73,18 @@ class ImgOps:
 
     @classmethod
     def dilate_rgb(cls, img):
-        structing_element = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 9))
+        structing_element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         dilated_img = cv2.dilate(img, structing_element)
         dilated_img = cls.handle_channel_conficts(dilated_img)
         return dilated_img
 
     @classmethod
     def erode_rgb(cls, img):
-        structing_element = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 9))
-        dilated_img = cv2.erode(img, structing_element)
-        dilated_img = cls.handle_channel_conficts(dilated_img)
+        binary_img = img.any(axis=2).astype(np.uint8) * 255
+        structing_element = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
+        dilated_mask = cv2.erode(binary_img, structing_element)
+        dilated_mask = dilated_mask.reshape((*dilated_mask.shape, 1))
+        dilated_img = img * dilated_mask * 255
         return dilated_img
 
     @classmethod
@@ -108,7 +111,7 @@ class ImgOps:
         return img
 
     @classmethod
-    def threshold(cls, img, thresh=0.3):
+    def threshold(cls, img, thresh=0.5):
         for i in range(3):
             img[:, :, i] = cls._threshold(img[:, :, i], thresh)
         img = cls.handle_channel_conficts(img)
@@ -126,9 +129,8 @@ class ImgOps:
     def postprocess(cls, img):
         img = cls.threshold(img)
         img = cls.keep_largest(img)
-        img = cls.dilate_rgb(img)
+        # img = cls.dilate_rgb(img)
         img = cls.imfill(img)
-        img = cls.erode_rgb(img)
         return img
 
     @classmethod
@@ -169,7 +171,7 @@ class ImgOps:
 
 
 if __name__ == '__main__':
-    patient_num = '0053'
+    patient_num = '0002'
     patient_str = f'patient{patient_num}'
     channel_str = '4CH_ED'
 
@@ -177,5 +179,5 @@ if __name__ == '__main__':
     mask_gt = cv2.imread(str(test_image_dir.joinpath(f'{patient_str}_{channel_str}_gt.png')))
     mask_pred = cv2.imread(str(test_image_dir.joinpath(f'{patient_str}_{channel_str}_pred.png')))
     tm = ImgOps.postprocess(mask_pred.copy())
-    imshow_img_pair(mask_gt, mask_pred)
+    imshow_imgs(mask_gt, mask_pred, tm)
 

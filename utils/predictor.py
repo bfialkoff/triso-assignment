@@ -88,11 +88,11 @@ class Predictor:
 
 
 if __name__ == '__main__':
-    backbone = 'resnext50_32x4d'
-    init_weights = Path(__file__).joinpath('..', '..', 'triso_weights', f'202011252258_{backbone}_model.pth').resolve()
+    backbone = 'resnet18'
+    init_weights = Path(__file__).joinpath('..', '..', 'triso_weights', f'202011262249_{backbone}_model.pth').resolve()
     # init_weights = None
     # epoch 45 has 0.8 val iou
-    model = Unet('resnext50_32x4d',
+    model = Unet(backbone,
                  encoder_weights='imagenet',
                  classes=3,
                  activation=None)

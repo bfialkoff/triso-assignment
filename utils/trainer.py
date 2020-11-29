@@ -66,7 +66,8 @@ class Trainer:
         state = torch.load(self.initial_weights)
         self.net.load_state_dict(state['state_dict'])
         self.optimizer.load_state_dict(state['optimizer'])
-        self.best_loss = state['best_loss']
+        self.best_loss = state.get('best_loss', float('inf'))
+        self.best_iou = state.get('best_iou', 0)
         self.initial_epoch = state['epoch']
 
     def forward(self, images, targets):
@@ -76,7 +77,7 @@ class Trainer:
         loss = self.criterion(outputs, masks)
         return loss, outputs
 
-    def iterate(self, epoch, phase, dataloader, num_batches, should_postprocess=True):
+    def iterate(self, epoch, phase, dataloader, num_batches):
         meter = Meter(phase, epoch)
         meter_pp = Meter(phase, epoch)
         start = time.strftime('%H:%M:%S')
@@ -87,7 +88,6 @@ class Trainer:
         for i, batch in tqdm(enumerate(dataloader), total=num_batches):
             images, targets = batch
             loss, outputs = self.forward(images, targets)
-            outputs_pp = outputs
             loss = loss / self.accumulation_steps
             if phase == 'train':
                 loss.backward()

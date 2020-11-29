@@ -1,9 +1,7 @@
 from random import sample, shuffle
 
 from torch import from_numpy
-import cv2
 import numpy as np
-from skimage import io
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -21,36 +19,37 @@ class ImageGenerator(ImgOps):
     def __init__(self, annotations_path, batch_size, input_shape=(512, 512), num_classes=3):
         self.annotations = pd.read_csv(annotations_path)
         self.batch_size = batch_size
-        self.val_batches = self.create_val_batches()
+        self.val_batches, self.num_val_batches = self.create_val_batches()
+        _, self.num_train_batches = self.create_train_batches()
         self.input_shape = input_shape
         self.num_classes = num_classes
 
     def create_train_batches(self):
         num_samples = len(self.annotations)
-        self.num_batches = num_samples // self.batch_size
+        num_batches = num_samples // self.batch_size
         remainder = num_samples % self.batch_size
         if remainder:
-            self.num_batches += 1
+            num_batches += 1
         difference = self.batch_size - remainder
         indices = list(range(num_samples))
 
         duplicates = sample(indices, difference)
         indices = indices + duplicates
         shuffle(indices)
-        batched = [indices[i:i+self.batch_size] for i in range(self.num_batches)]
-        return batched
+        batched = [indices[i:i+self.batch_size] for i in range(num_batches)]
+        return batched, num_batches
 
     def create_val_batches(self):
         num_samples = len(self.annotations)
-        self.num_batches = num_samples // self.batch_size
+        num_batches = num_samples // self.batch_size
         remainder = num_samples % self.batch_size
-        batches = [(i * self.batch_size, (i + 1) * self.batch_size) for i in range(self.num_batches)]
+        batches = [(i * self.batch_size, (i + 1) * self.batch_size) for i in range(num_batches)]
         if remainder:
-            s = self.num_batches * self.batch_size
+            s = num_batches * self.batch_size
             e = s + remainder
             batches.append((s, e))
         batches = [list(range(s, e)) for s, e in batches]
-        return batches
+        return batches, num_batches
 
     def imread_batch(self, batch):
         batch_list = batch.values.tolist()
@@ -69,7 +68,7 @@ class ImageGenerator(ImgOps):
         return images, masks
 
     def train_generator(self):
-        batches = self.create_train_batches()
+        batches, num_batches = self.create_train_batches()
         for batch_indices in batches:
             batch = self.annotations.loc[batch_indices]
             images, masks = self.imread_batch(batch)
@@ -99,8 +98,9 @@ class ImageGenerator(ImgOps):
             batch = self.annotations.loc[batch_indices]
             images, masks = self.imread_batch(batch)
             yield batch.values.tolist(), images
+
     def __len__(self):
-        return self.num_batches
+        return self.num_train_batches
 
 if __name__ == '__main__':
     from pathlib import Path
@@ -109,6 +109,7 @@ if __name__ == '__main__':
     img_gen = ImageGenerator(data_path.joinpath('train_annotations.csv').resolve(), 8)
     gen = img_gen.train_generator()
     for imgs, masks in gen:
+        continue
         for i, m in zip(imgs, masks):
             i = i.detach().permute(1, 2, 0).numpy()
             m = m.detach().permute(1, 2, 0).numpy()
